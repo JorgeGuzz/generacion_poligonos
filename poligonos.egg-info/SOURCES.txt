@@ -1,0 +1,13 @@
+MANIFEST.in
+README.md
+setup.py
+poligonos/__init__.py
+poligonos/ejecutar.py
+poligonos/generacion_poligonos.py
+poligonos/graficar_poligonos.py
+poligonos/utilidades_poligonos.py
+poligonos.egg-info/PKG-INFO
+poligonos.egg-info/SOURCES.txt
+poligonos.egg-info/dependency_links.txt
+poligonos.egg-info/requires.txt
+poligonos.egg-info/top_level.txt
