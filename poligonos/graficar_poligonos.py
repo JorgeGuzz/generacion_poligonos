@@ -8,7 +8,7 @@ import os
 import math
 
 from bokeh.plotting import figure, show, output_file
-from bokeh.models import ColumnDataSource, HoverTool, Slider, CustomJS
+from bokeh.models import ColumnDataSource, HoverTool, Slider, CustomJS, ColorBar, FixedTicker, Button
 from bokeh.layouts import column
 from bokeh.transform import factor_cmap, linear_cmap
 from bokeh.palettes import Category20
@@ -163,6 +163,24 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
     ])
     p.add_tools(hover)
 
+    # Calcular 6 ticks equidistantes para la colorbar
+    ticks = list(np.linspace(prof_min, prof_max, 6))
+
+    # Crear la barra de color con orientación horizontal, tamaño reducido y ticks fijos
+    color_bar = ColorBar(
+        color_mapper=color_mapper['transform'],
+        ticker=FixedTicker(ticks=ticks),
+        label_standoff=12,
+        orientation="horizontal",
+        location=(0, 0),
+        height=5,   # Altura (grosor) reducida
+        width=round(width*0.8),  # Ajusta el ancho si es necesario
+        title="Prof/Ton"
+    )
+
+    # Agrega la colorbar al gráfico, debajo de él
+    p.add_layout(color_bar, 'below')
+
     # Redondear hacia el entero anterior más cercano para los valores mínimo y máximo
     min_value_rounded = math.floor(df_merge["PROF_TON_y"].min())
     max_value_rounded = math.floor(df_merge["PROF_TON_y"].max())
@@ -172,6 +190,7 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
         end=max_value_rounded, 
         value=min_value_rounded, 
         step=0.5, 
+        align="center",
         title="Mínimo PROF_TON"
     )
 
@@ -215,8 +234,52 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
     # Vincular el slider con el callback
     slider.js_on_change("value", callback)
 
-    # Crear layout con gráfico y slider
-    layout = column(p, slider)
+    # Botón para exportar a CSV
+    export_button = Button(label="Exportar CSV", button_type="success")
+
+    export_callback = CustomJS(args=dict(source=source_filtered), code="""
+        // Función para convertir los datos de la fuente en formato CSV
+        function table_to_csv(source) {
+            const columns = Object.keys(source.data);
+            const nrows = source.data[columns[0]].length;
+            let lines = [];
+            // Agrega el encabezado
+            lines.push(columns.join(','));
+            // Recorre cada fila
+            for (let i = 0; i < nrows; i++) {
+                let row = [];
+                for (let j = 0; j < columns.length; j++) {
+                    let column = columns[j];
+                    row.push(source.data[column][i]);
+                }
+                lines.push(row.join(','));
+            }
+            return lines.join('\\n').concat('\\n');
+        }
+        
+        // Nombre del archivo a exportar
+        const filename = 'datos_filtrados.csv';
+        let filetext = table_to_csv(source);
+        
+        // Crear un Blob con el contenido CSV y disparar la descarga
+        let blob = new Blob([filetext], { type: 'text/csv;charset=utf-8;' });
+        if (navigator.msSaveBlob) { // Para IE 10+
+            navigator.msSaveBlob(blob, filename);
+        } else {
+            let link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.target = "_blank";
+            link.style.visibility = 'hidden';
+            link.dispatchEvent(new MouseEvent('click'));
+        }
+    """)
+
+    # Vincular el callback al botón
+    export_button.js_on_click(export_callback)
+
+    # Agregar el botón al layout junto con el gráfico y el slider
+    layout = column(p, slider, export_button, align="center")
 
     # Mostrar el gráfico
     show(layout)

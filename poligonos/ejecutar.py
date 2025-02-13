@@ -29,7 +29,7 @@ def generar_poligonos(
     coordenadas_dict = calcular_coordenadas_dict(df)
     coordenadas_sin_puntas_dict = eliminar_puntas(df, coordenadas_dict)
     df = encontrar_y_procesar_clusters(df, coordenadas_sin_puntas_dict, limite_toneladas_formacion)
-    df = reasignar_puntos(df, limite_toneladas_disolucion)
+    #df = reasignar_puntos(df, limite_toneladas_disolucion)
     df = actualizar_id_clusters(df)
 
     df_clusters = calcular_metricas_por_cluster(df)
