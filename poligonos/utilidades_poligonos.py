@@ -17,10 +17,6 @@ def preprocesar_datos(df, restricciones, dimensiones):
     # Normalizamos en X e Y
     df["X"] = (df["XC"] - df["XC"].min()) / dim_x
     df["Y"] = (df["YC"] - df["YC"].min()) / dim_y
-    interpolate_x = interp1d([df['X'].min(),df['X'].max()],[1,df['X'].nunique()])
-    interpolate_y = interp1d([df['Y'].min(),df['Y'].max()],[1,df['Y'].nunique()])
-    df['X'] = interpolate_x(df['X']).round()
-    df['Y'] = interpolate_y(df['Y']).round()
 
     # Agregamos columnas relevantes para el análisis posterior
     df["CLUSTER_ID"] = 0

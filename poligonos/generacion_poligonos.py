@@ -40,23 +40,6 @@ def eliminar_puntas(df, coordenadas_dict):
     return coordenadas_filtradas
 
 def expandir_clusters(df, inicial, coordenadas_dict, umbral_toneladas=100000):
-    """
-    Expande un cluster a partir de 'inicial' usando expansión rectangular y,
-    al finalizar, si la suma total de TONNES excede el doble del umbral,
-    lo divide recursivamente.
-    
-    Parámetros:
-      - df: DataFrame con los datos (debe incluir columnas 'X', 'Y' y 'CLUSTER_ID').
-      - inicial: Tupla (x, y) del bloque inicial.
-      - coordenadas_dict: Diccionario con la información de cada bloque.
-          Cada clave es una coordenada y su valor es un diccionario que contiene
-          al menos las claves 'TONNES' y 'PROF_TON'.
-      - umbral_toneladas: Límite de toneladas para formar un cluster.
-    
-    Devuelve:
-      - clusters_finales: Lista de clusters (cada uno es un conjunto de coordenadas).
-      - toneladas_finales: Lista con la suma de TONNES de cada cluster.
-    """
     # Inicializar límites del cluster a partir del bloque inicial
     x0, y0 = inicial
     min_x = max_x = int(x0)
@@ -80,22 +63,19 @@ def expandir_clusters(df, inicial, coordenadas_dict, umbral_toneladas=100000):
         opciones = {}
         
         # --- Expansión hacia ARRIBA ---
-        # Se buscan dos hileras consecutivas si están disponibles (para forzar grosor mínimo de 2)
-        candidate1 = [(x, min_y - 1) for x in range(min_x, max_x + 1) if (x, min_y - 1) in coordenadas_dict]
-        candidate2 = [(x, min_y - 2) for x in range(min_x, max_x + 1) if (x, min_y - 2) in coordenadas_dict]
+        candidate1 = [(x, min_y - 1) for x in range(min_x, max_x + 1) if coordenadas_dict.get((x, min_y - 1)) is not None]
+        candidate2 = [(x, min_y - 2) for x in range(min_x, max_x + 1) if coordenadas_dict.get((x, min_y - 2)) is not None]
         if candidate1:
-            # Si se encontró la segunda hilera, se agregan ambas
             bloques_arriba = candidate1 + candidate2 if candidate2 else candidate1
             total_blocks = len(candidate1) + (len(candidate2) if candidate2 else 0)
             promedio_arriba = ((sum(coordenadas_dict[b]['PROF_TON'] for b in candidate1) +
                                 (sum(coordenadas_dict[b]['PROF_TON'] for b in candidate2) if candidate2 else 0))
                                / total_blocks)
-            # Se guarda junto un flag de grosor: 2 si se pudo agregar la segunda hilera, 1 en caso contrario
             opciones['arriba'] = (bloques_arriba, promedio_arriba, 2 if candidate2 else 1)
         
         # --- Expansión hacia ABAJO ---
-        candidate1 = [(x, max_y + 1) for x in range(min_x, max_x + 1) if (x, max_y + 1) in coordenadas_dict]
-        candidate2 = [(x, max_y + 2) for x in range(min_x, max_x + 1) if (x, max_y + 2) in coordenadas_dict]
+        candidate1 = [(x, max_y + 1) for x in range(min_x, max_x + 1) if coordenadas_dict.get((x, max_y + 1)) is not None]
+        candidate2 = [(x, max_y + 2) for x in range(min_x, max_x + 1) if coordenadas_dict.get((x, max_y + 2)) is not None]
         if candidate1:
             bloques_abajo = candidate1 + candidate2 if candidate2 else candidate1
             total_blocks = len(candidate1) + (len(candidate2) if candidate2 else 0)
@@ -105,8 +85,8 @@ def expandir_clusters(df, inicial, coordenadas_dict, umbral_toneladas=100000):
             opciones['abajo'] = (bloques_abajo, promedio_abajo, 2 if candidate2 else 1)
         
         # --- Expansión hacia IZQUIERDA ---
-        candidate1 = [(min_x - 1, y) for y in range(min_y, max_y + 1) if (min_x - 1, y) in coordenadas_dict]
-        candidate2 = [(min_x - 2, y) for y in range(min_y, max_y + 1) if (min_x - 2, y) in coordenadas_dict]
+        candidate1 = [(min_x - 1, y) for y in range(min_y, max_y + 1) if coordenadas_dict.get((min_x - 1, y)) is not None]
+        candidate2 = [(min_x - 2, y) for y in range(min_y, max_y + 1) if coordenadas_dict.get((min_x - 2, y)) is not None]
         if candidate1:
             bloques_izquierda = candidate1 + candidate2 if candidate2 else candidate1
             total_blocks = len(candidate1) + (len(candidate2) if candidate2 else 0)
@@ -116,8 +96,8 @@ def expandir_clusters(df, inicial, coordenadas_dict, umbral_toneladas=100000):
             opciones['izquierda'] = (bloques_izquierda, promedio_izquierda, 2 if candidate2 else 1)
         
         # --- Expansión hacia DERECHA ---
-        candidate1 = [(max_x + 1, y) for y in range(min_y, max_y + 1) if (max_x + 1, y) in coordenadas_dict]
-        candidate2 = [(max_x + 2, y) for y in range(min_y, max_y + 1) if (max_x + 2, y) in coordenadas_dict]
+        candidate1 = [(max_x + 1, y) for y in range(min_y, max_y + 1) if coordenadas_dict.get((max_x + 1, y)) is not None]
+        candidate2 = [(max_x + 2, y) for y in range(min_y, max_y + 1) if coordenadas_dict.get((max_x + 2, y)) is not None]
         if candidate1:
             bloques_derecha = candidate1 + candidate2 if candidate2 else candidate1
             total_blocks = len(candidate1) + (len(candidate2) if candidate2 else 0)
@@ -155,7 +135,6 @@ def expandir_clusters(df, inicial, coordenadas_dict, umbral_toneladas=100000):
     clusters_finales = []
     toneladas_finales = []
     if suma_tonnes > 2 * umbral_toneladas:
-        # Se procede a dividir el cluster recursivamente
         clusters_divididos, toneladas_divididas = dividir_cluster(cluster_coords, 
                                                                   coordenadas_cluster_dict, 
                                                                   umbral_toneladas)
@@ -166,6 +145,7 @@ def expandir_clusters(df, inicial, coordenadas_dict, umbral_toneladas=100000):
         toneladas_finales.append(suma_tonnes)
     
     return clusters_finales, toneladas_finales
+
 
 def dividir_cluster(cluster, cluster_info, umbral_toneladas):
     """
