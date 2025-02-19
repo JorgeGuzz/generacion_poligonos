@@ -342,8 +342,6 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
         ("Cluster", "@CLUSTER_ID"),
         ("XC", "@XC{0,0}"),
         ("YC", "@YC{0,0}"),
-        ("X ref", "@X{0,0}"),
-        ("Y ref", "@Y{0,0}"),
         ("Toneladas (bloque)", "@TONNES_x{0,0}"),
         ("Toneladas (cluster)", "@TONNES_y{0,0}"),
         ("Prof/Ton (bloque)", "@PROF_TON_x{0.00}"),

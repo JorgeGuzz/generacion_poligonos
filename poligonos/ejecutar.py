@@ -10,8 +10,8 @@ from typing import List, Tuple
 
 def generar_poligonos(
     ruta_csv: str, 
-    ruta_outputs: str, 
-    nombre_sector: str, 
+    ruta_outputs: str = "Resultados", 
+    nombre_sector: str = "Mina", 
     limite_toneladas_formacion: int = 200_000, 
     limite_toneladas_disolucion: int = 100_000, 
     restricciones: List[str] = [], 
@@ -33,6 +33,7 @@ def generar_poligonos(
     df = actualizar_id_clusters(df)
 
     df_clusters = calcular_metricas_por_cluster(df)
+    df = df.drop(columns=["I2 POND", "REC_I2 POND", "NANO3 POND", "REC_NANO3 POND", "PROF_TON_CLIPPED"])
 
     df.to_csv(os.path.join(ruta_outputs,f"{nombre_sector} CLUSTERS PUNTO A PUNTO ({tonelaje_string}) [SIN PUNTAS].csv"), index=False)
     df_clusters.to_csv(os.path.join(ruta_outputs,f"{nombre_sector} INFO CLUSTERS ({tonelaje_string}) [SIN PUNTAS].csv"), index=True)
