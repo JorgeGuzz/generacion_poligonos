@@ -29,14 +29,15 @@ def generar_poligonos(
     coordenadas_dict = calcular_coordenadas_dict(df)
     coordenadas_sin_puntas_dict = eliminar_puntas(df, coordenadas_dict)
     df = encontrar_y_procesar_clusters(df, coordenadas_sin_puntas_dict, limite_toneladas_formacion)
-    #df = reasignar_puntos(df, limite_toneladas_disolucion)
+    #df = encontrar_y_procesar_clusters(df, coordenadas_dict, limite_toneladas_formacion)
+    df = reasignar_puntos(df, limite_toneladas_disolucion)
     df = actualizar_id_clusters(df)
 
     df_clusters = calcular_metricas_por_cluster(df)
     df = df.drop(columns=["I2 POND", "REC_I2 POND", "NANO3 POND", "REC_NANO3 POND", "PROF_TON_CLIPPED"])
 
-    df.to_csv(os.path.join(ruta_outputs,f"{nombre_sector} CLUSTERS PUNTO A PUNTO ({tonelaje_string}) [SIN PUNTAS].csv"), index=False)
-    df_clusters.to_csv(os.path.join(ruta_outputs,f"{nombre_sector} INFO CLUSTERS ({tonelaje_string}) [SIN PUNTAS].csv"), index=True)
+    df.to_csv(os.path.join(ruta_outputs,f"{nombre_sector} CLUSTERS PUNTO A PUNTO ({tonelaje_string}).csv"), index=False)
+    df_clusters.to_csv(os.path.join(ruta_outputs,f"{nombre_sector} INFO CLUSTERS ({tonelaje_string}).csv"), index=True)
 
     graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_string)
     graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_string)

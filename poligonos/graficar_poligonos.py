@@ -14,74 +14,94 @@ from bokeh.transform import factor_cmap, linear_cmap
 from bokeh.palettes import Category20
 
 def graficar_iso_prof_ton_bloques_individuales(df, ruta_outputs, nombre_sector):
+
+    # Cálculo de límites y razón de aspecto según tus datos
     x_min, x_max = df["XC"].min(), df["XC"].max()
     y_min, y_max = df["YC"].min(), df["YC"].max()
     aspect_ratio = (y_max - y_min) / (x_max - x_min)
-    plot_width = 40
-    plot_height = int(plot_width * aspect_ratio)
+    dim_x, dim_y = df['XINC'].iloc[0], df['YINC'].iloc[0]
+    
+    plot_height = 40
+    plot_width = int(plot_height / aspect_ratio)
 
-    # Calcular percentiles para manejar outliers
-    prof_p1 = np.percentile(df["PROF_TON"], 1)   # Percentil 1
-    prof_p99 = np.percentile(df["PROF_TON"], 99)  # Percentil 99
-
-    # Clipping de los datos de PROF_TON dentro del rango de percentiles
+    # Recorte de outliers para la variable PROF_TON
+    prof_p1 = np.percentile(df["PROF_TON"], 1)
+    prof_p99 = np.percentile(df["PROF_TON"], 99)
     df["PROF_TON_CLIPPED"] = np.clip(df["PROF_TON"], prof_p1, prof_p99)
 
-    plt.figure(figsize=(plot_width, plot_height))
+    # Crear la figura con las dimensiones originales calculadas
+    fig = plt.figure(figsize=(plot_width, plot_height))
+    ax = plt.gca()
+
+    # Definir límites de los ejes con un margen extra
+    margin = dim_x
+    ax.set_xlim(x_min - margin, x_max + margin)
+    ax.set_ylim(y_min - margin, y_max + margin)
+
+    # Forzar el renderizado para que se actualicen las transformaciones
+    fig.canvas.draw()
+
+    # Definir el step de la grilla (en unidades de datos)
+    cell_size = dim_x
+
+    # Calcular el tamaño en puntos de una celda en la dirección X
+    p0_x = ax.transData.transform((0, 0))
+    p1_x = ax.transData.transform((cell_size, 0))
+    cell_width_points = np.abs(p1_x[0] - p0_x[0])
+
+    # Calcular el tamaño en puntos de una celda en la dirección Y
+    p0_y = ax.transData.transform((0, 0))
+    p1_y = ax.transData.transform((0, cell_size))
+    cell_height_points = np.abs(p1_y[1] - p0_y[1])
+
+    # Usar el mínimo para asegurar que el cuadrado quepa en la grilla
+    cell_size_points = min(cell_width_points, cell_height_points)
+    # Por ejemplo, usar el 80% del tamaño de la celda para el cuadrado
+    marker_side = 0.65 * cell_size_points
+    # s se define como área en puntos²
+    marker_size = marker_side ** 2
+
+    # Graficar con scatterplot de Seaborn usando el tamaño calculado
     scatter_plot = sns.scatterplot(
         data=df,
         x="XC",
         y="YC",
-        s=40,
-        linestyle="-",
-        linewidth=1,
-        edgecolor="black",
+        ax=ax,
+        s=marker_size,
         marker="s",
-        hue="PROF_TON_CLIPPED",  # Usamos CLUSTER_ID para determinar los colores
-        palette="gist_rainbow",    # Paleta categórica
-        alpha=1,         # Transparencia
-        legend=None      # Mostrar la leyenda de clusters
+        edgecolor="black",
+        linewidth=marker_size*0.02 / (dim_x/25),
+        hue="PROF_TON_CLIPPED",
+        palette="gist_rainbow",
+        alpha=1,
+        legend=None
     )
 
-    # Ajustar los límites de los ejes según los datos
-    plt.xlim(df["XC"].min() - 25, df["XC"].max() + 25)
-    plt.ylim(df["YC"].min() - 25, df["YC"].max() + 25)
+    # Configurar los ticks y la grilla
+    grid_step = cell_size * 25
+    x_ticks = np.arange(x_min - margin, x_max + margin + grid_step, step=grid_step)
+    y_ticks = np.arange(y_min - margin, y_max + margin + grid_step, step=grid_step)
+    ax.set_xticks(x_ticks)
+    ax.set_yticks(y_ticks)
+    ax.tick_params(labelsize=6)
+    ax.grid(True, linestyle="--", linewidth=1, color="gray", alpha=0.8)
 
-    # Definir los intervalos de la grilla (ajusta el paso según necesites)
-    x_min, x_max = plt.xlim()
-    y_min, y_max = plt.ylim()
-    x_ticks = np.arange(x_min, x_max, step=125)  # Ajusta el step para cambiar el tamaño de los cuadrados
-    y_ticks = np.arange(y_min, y_max, step=125)  
-
-    plt.xticks(x_ticks, fontsize=6)
-    plt.yticks(y_ticks, fontsize=6)
-
-    # Configurar la grilla con más visibilidad
-    plt.grid(
-        True, 
-        linestyle="--",  # Línea punteada
-        linewidth=1,   # Grosor más grande
-        color="gray",    # Color más visible
-        alpha=0.8        # Opacidad más alta
-    )
-
-    # Configuración del colorbar con tamaño ajustado
+    # Configurar el colorbar
     norm = plt.Normalize(prof_p1, prof_p99)
     sm = plt.cm.ScalarMappable(cmap="gist_rainbow", norm=norm)
     sm.set_array([])
-    # Ajustar colorbar: más delgado y con etiquetas más grandes
-    cbar = plt.colorbar(sm, ax=scatter_plot, pad=0.02, aspect=30, shrink=0.6)
+    cbar = plt.colorbar(sm, ax=ax, pad=0.02, aspect=30, shrink=0.6)
     cbar.set_label("Profit / Tonelada", fontsize=50)
-    cbar.ax.tick_params(labelsize=20)  # Aumentar tamaño de etiquetas
+    cbar.ax.tick_params(labelsize=20)
 
-    # Configuraciones adicionales del gráfico
-    plt.title(f"Distribución de Profit/Tonelada ({nombre_sector})", fontsize=50)
-    plt.xlabel("XC", fontsize=20)
-    plt.ylabel("YC", fontsize=20)
+    # Título y etiquetas
+    ax.set_title(f"Distribución de Profit/Tonelada ({nombre_sector})", fontsize=50)
+    ax.set_xlabel("XC", fontsize=20)
+    ax.set_ylabel("YC", fontsize=20)
 
-    # Mostrar el gráfico
     plt.tight_layout()
-    plt.savefig(os.path.join(ruta_outputs, f'Profit por tonelada bloque a bloque {nombre_sector}.png'), dpi=300, bbox_inches="tight")  # Guardar con alta resolución y sin bordes adicionales
+    plt.savefig(os.path.join(ruta_outputs, f'Profit por tonelada bloque a bloque {nombre_sector}.png'), dpi=300, bbox_inches="tight")
+
 
 def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_string):
     # Unir df con df_clusters para agregar las características de cada cluster
@@ -94,7 +114,8 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
     source = ColumnDataSource(df_merge)
     source_filtered = ColumnDataSource(df_merge)  # Fuente filtrada que se actualizará dinámicamente
 
-    square_size = 23
+    dim_x, dim_y = df['XINC'].iloc[0], df['YINC'].iloc[0]
+    square_size = dim_x - (2 * dim_x / 25)
     # Calcular límites y tamaño dinámico
     x_min, x_max = df_merge["XC"].min(), df_merge["XC"].max()
     y_min, y_max = df_merge["YC"].min(), df_merge["YC"].max()
@@ -306,7 +327,8 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
     source = ColumnDataSource(df_merge)
     source_filtered = ColumnDataSource(df_merge)  # Fuente filtrada que se actualizará dinámicamente
 
-    square_size = 23
+    dim_x, dim_y = df['XINC'].iloc[0], df['YINC'].iloc[0]
+    square_size = dim_x - (2 * dim_x / 25)
     # Calcular límites y tamaño dinámico
     x_min, x_max = df_merge["XC"].min(), df_merge["XC"].max()
     y_min, y_max = df_merge["YC"].min(), df_merge["YC"].max()
@@ -342,6 +364,8 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
         ("Cluster", "@CLUSTER_ID"),
         ("XC", "@XC{0,0}"),
         ("YC", "@YC{0,0}"),
+        ("X ref", "@X{0,0}"),
+        ("Y ref", "@Y{0,0}"),
         ("Toneladas (bloque)", "@TONNES_x{0,0}"),
         ("Toneladas (cluster)", "@TONNES_y{0,0}"),
         ("Prof/Ton (bloque)", "@PROF_TON_x{0.00}"),
@@ -370,6 +394,8 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
     var fdata = {
         'XC': [],
         'YC': [],
+        'X': [],
+        'Y': [],
         'CLUSTER_ID': [],
         'TONNES_x': [],
         'TONNES_y': [],
@@ -386,6 +412,8 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
         if (data['PROF_TON_y'][i] >= min_value) {
             fdata['XC'].push(data['XC'][i]);
             fdata['YC'].push(data['YC'][i]);
+            fdata['X'].push(data['X'][i]);
+            fdata['Y'].push(data['Y'][i]);
             fdata['CLUSTER_ID'].push(data['CLUSTER_ID'][i]);
             fdata['TONNES_x'].push(data['TONNES_x'][i]);
             fdata['TONNES_y'].push(data['TONNES_y'][i]);

@@ -248,60 +248,83 @@ def encontrar_y_procesar_clusters(df, coordenadas_dict, umbral_toneladas=100000)
 
 def reasignar_puntos(df, umbral_toneladas=100000):
     """
-    Reasigna puntos de clusters pequeños y del cluster 0 a clusters grandes
-    considerando la distancia euclidiana y el tonelaje total.
+    Reasigna puntos de clusters pequeños y del cluster 0 a clusters grandes.
+    
+    Para cada cluster pequeño se calcula, para cada cluster grande, el promedio de las distancias mínimas:
+    es decir, para cada punto del cluster pequeño se toma la distancia al punto más cercano del cluster grande.
+    Se selecciona como candidato a cluster receptor aquel cuya distancia promedio esté dentro de un factor 1.2 
+    del mínimo obtenido, y en caso de haber varios, el que tenga menor TONNES acumulado.
+    
+    Finalmente, se reasignan todos los puntos del cluster pequeño al cluster grande elegido.
     """
-    # Identificar clusters grandes (con suficiente tonelaje) y pequeños
-    tamanos_clusters = df.groupby('CLUSTER_ID')['TONNES'].sum()
-    
-    # Excluir explícitamente el cluster 0 y 1 de los grandes clusters
-    clusters_grandes = tamanos_clusters[(tamanos_clusters >= umbral_toneladas) & 
-                                         (tamanos_clusters.index != 0) & 
+
+    # Calcular el tonelaje total de cada cluster.
+    tamanos_clusters = df.groupby('CLUSTER_ID')['TONNES'].sum().copy()
+
+    # Definir clusters grandes y pequeños.
+    clusters_grandes = tamanos_clusters[(tamanos_clusters >= umbral_toneladas) &
+                                         (tamanos_clusters.index != 0) &
                                          (tamanos_clusters.index != 1)].index
-    
-    # Incluir explícitamente el cluster 0 en los clusters pequeños
+
     clusters_pequenos = tamanos_clusters[((tamanos_clusters < umbral_toneladas) | 
-                                          (tamanos_clusters.index == 0)) & 
+                                          (tamanos_clusters.index == 0)) &
                                           (tamanos_clusters.index != 1)].index
 
-    # Filtrar puntos pertenecientes a clusters pequeños y al cluster 0
-    puntos_clusters_pequenos = df[df['CLUSTER_ID'].isin(clusters_pequenos)]
+    # Filtrar los puntos de los clusters grandes.
     puntos_clusters_grandes = df[df['CLUSTER_ID'].isin(clusters_grandes)]
+    if puntos_clusters_grandes.empty:
+        return df
 
-    for idx, punto in puntos_clusters_pequenos.iterrows():
-        # Obtener coordenadas del punto actual
-        coordenadas_punto = np.array([[punto['X'], punto['Y']]], dtype=np.float64)
+    # Precalcular las coordenadas de cada cluster grande.
+    coord_grandes = {}
+    for cluster in clusters_grandes:
+        pts = df[df['CLUSTER_ID'] == cluster][['X', 'Y']].values.astype(np.float64)
+        if pts.size > 0:
+            coord_grandes[cluster] = pts
 
-        # Si no hay clusters grandes, no reasignamos
-        if puntos_clusters_grandes.empty:
+    # Iterar sobre cada cluster pequeño.
+    for cluster_peq in clusters_pequenos:
+        # Obtener los puntos del cluster pequeño actual.
+        pts_peq = df[df['CLUSTER_ID'] == cluster_peq][['X', 'Y']].values.astype(np.float64)
+        if pts_peq.size == 0:
             continue
 
-        # Obtener coordenadas de los clusters grandes
-        coordenadas_grandes = puntos_clusters_grandes[['X', 'Y']].values.astype(np.float64)
+        avg_distancias = {}
+        # Para cada cluster grande, calcular el promedio de las distancias mínimas:
+        for cluster_gr in clusters_grandes:
+            pts_gr = coord_grandes.get(cluster_gr)
+            if pts_gr is None or pts_gr.size == 0:
+                continue
+            # Calcular todas las distancias entre los puntos del pequeño y los puntos del grande.
+            distancias = cdist(pts_peq, pts_gr)
+            # Para cada punto del cluster pequeño se toma la distancia mínima (al punto más cercano del cluster grande).
+            min_distancias = np.min(distancias, axis=1)
+            # Promedio de las distancias mínimas para este par de clusters.
+            avg = np.mean(min_distancias)
+            avg_distancias[cluster_gr] = avg
 
-        # Calcular distancias a todos los puntos de clusters grandes
-        distancias = cdist(coordenadas_punto, coordenadas_grandes)[0]
+        if not avg_distancias:
+            continue
 
-        # Obtener el índice del punto más cercano
-        indice_mas_cercano = distancias.argmin()
-        distancia_minima = distancias[indice_mas_cercano]
+        # Encontrar el mínimo de las distancias promedio.
+        min_avg = min(avg_distancias.values())
 
-        # Verificar si hay empate en la distancia
-        puntos_empatados = puntos_clusters_grandes.loc[distancias == distancia_minima]
+        # Seleccionar candidatos: aquellos clusters grandes cuya distancia promedio sea <= 1.2 * min_avg.
+        candidatos = {k: v for k, v in avg_distancias.items() if v <= 1.2 * min_avg}
+        if not candidatos:
+            continue
 
-        if len(puntos_empatados) > 1:
-            # Desempatar considerando el tonelaje total
-            clusters_empatados = puntos_empatados['CLUSTER_ID'].values
-            toneladas_clusters = tamanos_clusters[clusters_empatados]
-            cluster_mas_cercano = toneladas_clusters.idxmin()
-        else:
-            # Si no hay empate, asignar al cluster más cercano
-            cluster_mas_cercano = puntos_empatados.iloc[0]['CLUSTER_ID']
+        # De entre los candidatos, escoger el que tenga menor TONNES acumulado.
+        candidato_final = min(candidatos.keys(), key=lambda x: tamanos_clusters[x])
 
-        # Reasignar el punto al cluster más cercano
-        df.at[idx, 'CLUSTER_ID'] = cluster_mas_cercano
+        # Reasignar todos los puntos del cluster pequeño al cluster grande elegido.
+        df.loc[df['CLUSTER_ID'] == cluster_peq, 'CLUSTER_ID'] = candidato_final
 
-        # Actualizar el tonelaje del cluster receptor
-        tamanos_clusters[cluster_mas_cercano] += punto['TONNES']
+        # Actualizar el TONNES del cluster receptor (usando los datos actualizados en df).
+        suma_toneladas = df[df['CLUSTER_ID'] == candidato_final]['TONNES'].sum()
+        tamanos_clusters[candidato_final] = suma_toneladas
+
+        # Actualizar las coordenadas del cluster receptor para futuros cálculos.
+        coord_grandes[candidato_final] = df[df['CLUSTER_ID'] == candidato_final][['X', 'Y']].values.astype(np.float64)
 
     return df

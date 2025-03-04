@@ -1,17 +1,30 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: poligonos
 Version: 0.1
 Summary: Un paquete para la generación y visualización de polígonos en minería
 Home-page: https://github.com/jorgeguzz/generacion_poligonos
 Author: Jorge Guzmán
 Author-email: jguzmanv01@uc.cl
-License: UNKNOWN
-Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scipy
+Requires-Dist: seaborn
+Requires-Dist: matplotlib
+Requires-Dist: bokeh
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
 
 # GeneraciÃ³n de polÃ­gonos en minerÃ­a
 ### FunciÃ³n principal (genera, grafica y exporta los datos de los polÃ­gonos generados)
@@ -44,4 +57,3 @@ generar_poligonos(ruta_csv=RUTA_CSV,
                   restricciones=RESTRICCIONES,
                   dimensiones=DIMENSIONES)
 ```
-
