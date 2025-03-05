@@ -113,15 +113,18 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
     source = ColumnDataSource(df_merge)
     source_filtered = ColumnDataSource(df_merge)  # Fuente filtrada que se actualizará dinámicamente
 
+    # Fuente de datos estática con el DataFrame original "df" (con las columnas originales)
+    source_static = ColumnDataSource(df)
+
     dim_x, dim_y = df['XINC'].iloc[0], df['YINC'].iloc[0]
     square_size = dim_x - (2 * dim_x / 25)
     # Calcular límites y tamaño dinámico
     x_min, x_max = df_merge["XC"].min(), df_merge["XC"].max()
     y_min, y_max = df_merge["YC"].min(), df_merge["YC"].max()
     aspect_ratio = (y_max - y_min) / (x_max - x_min)
-    width = 800
-    height = int(width * aspect_ratio)
-    height = max(800, min(height, 2000))
+    height = 500
+    # height = max(800, min(height, 2000))
+    width = int(height / aspect_ratio)
 
     # Definir el archivo HTML de salida
     output_path = os.path.join(ruta_outputs, f"{nombre_sector} - Clusters Interactivos ({tonelaje_string}) (Heatmap).html")
@@ -217,89 +220,6 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
         title="Mínimo PROF_TON"
     )
 
-    # Definir el callback para actualizar los datos y la visibilidad
-    callback = CustomJS(args=dict(source=source, source_filtered=source_filtered, slider=slider), code="""
-    var data = source.data;
-    var fdata = {
-        'XC': [],
-        'YC': [],
-        'CLUSTER_ID': [],
-        'TONNES_x': [],
-        'TONNES_y': [],
-        'PROF_TON_x': [],
-        'PROF_TON_y': [],
-        'ESPESOR_CAL_x' : [],
-        'LEY_I2': [],
-        'NANO3': [],
-        'FC_I2': []
-    };
-    var min_value = slider.value;
-    
-    // Recorremos todos los datos y filtramos aquellos que cumplen la condición
-    for (var i = 0; i < data['PROF_TON_y'].length; i++) {
-        if (data['PROF_TON_y'][i] >= min_value) {
-            fdata['XC'].push(data['XC'][i]);
-            fdata['YC'].push(data['YC'][i]);
-            fdata['CLUSTER_ID'].push(data['CLUSTER_ID'][i]);
-            fdata['TONNES_x'].push(data['TONNES_x'][i]);
-            fdata['TONNES_y'].push(data['TONNES_y'][i]);
-            fdata['PROF_TON_x'].push(data['PROF_TON_x'][i]);
-            fdata['PROF_TON_y'].push(data['PROF_TON_y'][i]);
-            fdata['ESPESOR_CAL_x'].push(data['ESPESOR_CAL_x'][i]);         
-            fdata['LEY_I2'].push(data['LEY_I2'][i]);
-            fdata['NANO3'].push(data['NANO3'][i]);
-            fdata['FC_I2'].push(data['FC_I2'][i]);
-        }
-    }
-    
-    // Se asigna el nuevo objeto de datos filtrados a la fuente
-    source_filtered.data = fdata;
-    """)
-
-    # Vincular el slider con el callback
-    slider.js_on_change("value", callback)
-
-    # Botón para exportar a CSV
-    export_button = Button(label="Exportar CSV", button_type="success")
-
-    export_callback = CustomJS(args=dict(source=source_filtered), code="""
-        // Función para convertir los datos de la fuente en formato CSV
-        function table_to_csv(source) {
-            const columns = Object.keys(source.data);
-            const nrows = source.data[columns[0]].length;
-            let lines = [];
-            // Agrega el encabezado
-            lines.push(columns.join(','));
-            // Recorre cada fila
-            for (let i = 0; i < nrows; i++) {
-                let row = [];
-                for (let j = 0; j < columns.length; j++) {
-                    let column = columns[j];
-                    row.push(source.data[column][i]);
-                }
-                lines.push(row.join(','));
-            }
-            return lines.join('\\n').concat('\\n');
-        }
-        
-        // Nombre del archivo a exportar
-        const filename = 'datos_filtrados.csv';
-        let filetext = table_to_csv(source);
-        
-        // Crear un Blob con el contenido CSV y disparar la descarga
-        let blob = new Blob([filetext], { type: 'text/csv;charset=utf-8;' });
-        if (navigator.msSaveBlob) { // Para IE 10+
-            navigator.msSaveBlob(blob, filename);
-        } else {
-            let link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            link.target = "_blank";
-            link.style.visibility = 'hidden';
-            link.dispatchEvent(new MouseEvent('click'));
-        }
-    """)
-
     # Crear el widget MultiSelect con los clusters disponibles
     unique_clusters = df_merge["CLUSTER_ID"].unique().tolist()
     unique_clusters_sorted = sorted(unique_clusters, key=lambda x: int(x))
@@ -310,22 +230,39 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
         size=25
     )
 
-    # Callback que filtra la fuente en función de los clusters seleccionados y el slider
-    callback_select = CustomJS(args=dict(source=source, source_filtered=source_filtered, multi_select=multi_select, slider=slider), code="""
+    callback_unificado = CustomJS(
+        args=dict(source=source, source_filtered=source_filtered, slider=slider, multi_select=multi_select),
+        code="""
         var data = source.data;
-        var fdata = { 'XC': [], 'YC': [], 'X': [], 'Y': [], 'CLUSTER_ID': [],
-                    'TONNES_x': [], 'TONNES_y': [], 'PROF_TON_x': [], 'PROF_TON_y': [],
-                    'ESPESOR_CAL_x': [], 'LEY_I2': [], 'NANO3': [], 'FC_I2': [] };
+        // Se define el objeto fdata con todas las claves que se esperan en source_filtered.
+        var fdata = { 
+            'XC': [], 
+            'YC': [], 
+            'X': [], 
+            'Y': [], 
+            'CLUSTER_ID': [],
+            'TONNES_x': [], 
+            'TONNES_y': [], 
+            'PROF_TON_x': [], 
+            'PROF_TON_y': [],
+            'ESPESOR_CAL_x': [], 
+            'LEY_I2': [], 
+            'NANO3': [], 
+            'FC_I2': []
+        };
         
-        var selected_clusters = multi_select.value;  // Array con los clusters seleccionados
-        var min_value = slider.value;
+        var slider_val = slider.value;
+        var selected_clusters = multi_select.value;
         
+        // Recorrer todas las filas y aplicar ambos filtros:
+        //   - El cluster debe estar entre los seleccionados.
+        //   - PROF_TON_y debe ser mayor o igual al valor del slider.
         for (var i = 0; i < data['CLUSTER_ID'].length; i++) {
-            if (selected_clusters.includes(data['CLUSTER_ID'][i]) && data['PROF_TON_y'][i] >= min_value) {
+            if (selected_clusters.includes(data['CLUSTER_ID'][i]) && data['PROF_TON_y'][i] >= slider_val) {
                 fdata['XC'].push(data['XC'][i]);
                 fdata['YC'].push(data['YC'][i]);
-                fdata['X'].push(data['X'][i]);
-                fdata['Y'].push(data['Y'][i]);
+                if(data.hasOwnProperty('X')) { fdata['X'].push(data['X'][i]); }
+                if(data.hasOwnProperty('Y')) { fdata['Y'].push(data['Y'][i]); }
                 fdata['CLUSTER_ID'].push(data['CLUSTER_ID'][i]);
                 fdata['TONNES_x'].push(data['TONNES_x'][i]);
                 fdata['TONNES_y'].push(data['TONNES_y'][i]);
@@ -337,13 +274,81 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
                 fdata['FC_I2'].push(data['FC_I2'][i]);
             }
         }
+        
         source_filtered.data = fdata;
-    """)
+        source_filtered.change.emit();
+        """
+    )
 
-    # Vincular el widget MultiSelect al callback
-    multi_select.js_on_change("value", callback_select)
+    slider.js_on_change("value", callback_unificado)
+    multi_select.js_on_change("value", callback_unificado)
 
-    # Vincular el callback al botón
+    # Botón para exportar CSV
+    export_button = Button(label="Exportar CSV", button_type="success")
+
+    # Callback JavaScript que filtra "source_static" usando los CLUSTER_ID presentes en "source_filtered"
+    export_callback = CustomJS(
+        args=dict(source_static=source_static, source_filtered=source_filtered),
+        code="""
+            // Función que convierte un objeto de datos en CSV
+            function table_to_csv(data_dict) {
+                const columns = Object.keys(data_dict);
+                const nrows = data_dict[columns[0]].length;
+                let lines = [];
+                // Agregar cabecera
+                lines.push(columns.join(','));
+                // Agregar cada fila
+                for (let i = 0; i < nrows; i++){
+                    let row = [];
+                    for (let j = 0; j < columns.length; j++){
+                        row.push(data_dict[columns[j]][i]);
+                    }
+                    lines.push(row.join(','));
+                }
+                return lines.join('\\n').concat('\\n');
+            }
+            
+            // Obtener los CLUSTER_ID de los datos filtrados (source_filtered)
+            const filtered_data = source_filtered.data;
+            const filtered_clusters = new Set(filtered_data['CLUSTER_ID']);
+            
+            // Obtener los datos originales (source_static) con las columnas de df
+            const orig = source_static.data;
+            let export_data = {};
+            // Inicializar export_data con las mismas columnas que orig
+            for (const key in orig) {
+                export_data[key] = [];
+            }
+            
+            const n = orig['CLUSTER_ID'].length;
+            // Filtrar: incluir solo filas cuyo CLUSTER_ID (convertido a string) esté en el conjunto filtrado
+            for (let i = 0; i < n; i++){
+                if (filtered_clusters.has(String(orig['CLUSTER_ID'][i]))){
+                    for (const key in orig){
+                        export_data[key].push(orig[key][i]);
+                    }
+                }
+            }
+            
+            // Convertir export_data a CSV
+            const csv = table_to_csv(export_data);
+            const filename = 'filtrado.csv';
+            
+            // Crear Blob y disparar la descarga del CSV
+            let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            if (navigator.msSaveBlob){
+                navigator.msSaveBlob(blob, filename);
+            } else {
+                let link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                link.target = "_blank";
+                link.style.visibility = 'hidden';
+                link.dispatchEvent(new MouseEvent('click'));
+            }
+        """
+    )
+
     export_button.js_on_click(export_callback)
 
     # Crear layout
@@ -372,15 +377,18 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
     source = ColumnDataSource(df_merge)
     source_filtered = ColumnDataSource(df_merge)  # Fuente filtrada que se actualizará dinámicamente
 
+    # Fuente de datos estática con el DataFrame original "df" (con las columnas originales)
+    source_static = ColumnDataSource(df)
+
     dim_x, dim_y = df['XINC'].iloc[0], df['YINC'].iloc[0]
     square_size = dim_x - (2 * dim_x / 25)
     # Calcular límites y tamaño dinámico
     x_min, x_max = df_merge["XC"].min(), df_merge["XC"].max()
     y_min, y_max = df_merge["YC"].min(), df_merge["YC"].max()
     aspect_ratio = (y_max - y_min) / (x_max - x_min)
-    width = 800
-    height = int(width * aspect_ratio)
-    height = max(800, min(height, 2000))
+    height = 500
+    # height = max(800, min(height, 2000))
+    width = int(height / aspect_ratio)
 
     # Crear la figura de Bokeh
     p = figure(
@@ -434,52 +442,6 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
         title="Mínimo PROF_TON"
     )
 
-    # Definir el callback para actualizar los datos y la visibilidad
-    callback = CustomJS(args=dict(source=source, source_filtered=source_filtered, slider=slider), code="""
-    var data = source.data;
-    var fdata = {
-        'XC': [],
-        'YC': [],
-        'X': [],
-        'Y': [],
-        'CLUSTER_ID': [],
-        'TONNES_x': [],
-        'TONNES_y': [],
-        'PROF_TON_x': [],
-        'PROF_TON_y': [],
-        'ESPESOR_CAL_x': [],
-        'LEY_I2': [],
-        'NANO3': [],
-        'FC_I2': []
-    };
-    var min_value = slider.value;
-    
-    // Recorremos todos los datos y filtramos aquellos que cumplen la condición
-    for (var i = 0; i < data['PROF_TON_y'].length; i++) {
-        if (data['PROF_TON_y'][i] >= min_value) {
-            fdata['XC'].push(data['XC'][i]);
-            fdata['YC'].push(data['YC'][i]);
-            fdata['X'].push(data['X'][i]);
-            fdata['Y'].push(data['Y'][i]);
-            fdata['CLUSTER_ID'].push(data['CLUSTER_ID'][i]);
-            fdata['TONNES_x'].push(data['TONNES_x'][i]);
-            fdata['TONNES_y'].push(data['TONNES_y'][i]);
-            fdata['PROF_TON_x'].push(data['PROF_TON_x'][i]);
-            fdata['PROF_TON_y'].push(data['PROF_TON_y'][i]);
-            fdata['ESPESOR_CAL_x'].push(data['ESPESOR_CAL_x'][i]);
-            fdata['LEY_I2'].push(data['LEY_I2'][i]);
-            fdata['NANO3'].push(data['NANO3'][i]);
-            fdata['FC_I2'].push(data['FC_I2'][i]);
-        }
-    }
-    
-    // Se asigna el nuevo objeto de datos filtrados a la fuente
-    source_filtered.data = fdata;
-    """)
-
-    # Vincular el slider con el callback
-    slider.js_on_change("value", callback)
-
     # Crear el widget MultiSelect con los clusters disponibles
     unique_clusters_sorted = sorted(unique_clusters, key=lambda x: int(x))
     multi_select = MultiSelect(
@@ -489,22 +451,39 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
         size=25
     )
 
-    # Callback que filtra la fuente en función de los clusters seleccionados y el slider
-    callback_select = CustomJS(args=dict(source=source, source_filtered=source_filtered, multi_select=multi_select, slider=slider), code="""
+    callback_unificado = CustomJS(
+        args=dict(source=source, source_filtered=source_filtered, slider=slider, multi_select=multi_select),
+        code="""
         var data = source.data;
-        var fdata = { 'XC': [], 'YC': [], 'X': [], 'Y': [], 'CLUSTER_ID': [],
-                    'TONNES_x': [], 'TONNES_y': [], 'PROF_TON_x': [], 'PROF_TON_y': [],
-                    'ESPESOR_CAL_x': [], 'LEY_I2': [], 'NANO3': [], 'FC_I2': [] };
+        // Se define el objeto fdata con todas las claves que se esperan en source_filtered.
+        var fdata = { 
+            'XC': [], 
+            'YC': [], 
+            'X': [], 
+            'Y': [], 
+            'CLUSTER_ID': [],
+            'TONNES_x': [], 
+            'TONNES_y': [], 
+            'PROF_TON_x': [], 
+            'PROF_TON_y': [],
+            'ESPESOR_CAL_x': [], 
+            'LEY_I2': [], 
+            'NANO3': [], 
+            'FC_I2': []
+        };
         
-        var selected_clusters = multi_select.value;  // Array con los clusters seleccionados
-        var min_value = slider.value;
+        var slider_val = slider.value;
+        var selected_clusters = multi_select.value;
         
+        // Recorrer todas las filas y aplicar ambos filtros:
+        //   - El cluster debe estar entre los seleccionados.
+        //   - PROF_TON_y debe ser mayor o igual al valor del slider.
         for (var i = 0; i < data['CLUSTER_ID'].length; i++) {
-            if (selected_clusters.includes(data['CLUSTER_ID'][i]) && data['PROF_TON_y'][i] >= min_value) {
+            if (selected_clusters.includes(data['CLUSTER_ID'][i]) && data['PROF_TON_y'][i] >= slider_val) {
                 fdata['XC'].push(data['XC'][i]);
                 fdata['YC'].push(data['YC'][i]);
-                fdata['X'].push(data['X'][i]);
-                fdata['Y'].push(data['Y'][i]);
+                if(data.hasOwnProperty('X')) { fdata['X'].push(data['X'][i]); }
+                if(data.hasOwnProperty('Y')) { fdata['Y'].push(data['Y'][i]); }
                 fdata['CLUSTER_ID'].push(data['CLUSTER_ID'][i]);
                 fdata['TONNES_x'].push(data['TONNES_x'][i]);
                 fdata['TONNES_y'].push(data['TONNES_y'][i]);
@@ -516,14 +495,85 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
                 fdata['FC_I2'].push(data['FC_I2'][i]);
             }
         }
+        
         source_filtered.data = fdata;
-    """)
+        source_filtered.change.emit();
+        """
+    )
 
-    # Vincular el widget MultiSelect al callback
-    multi_select.js_on_change("value", callback_select)
+    slider.js_on_change("value", callback_unificado)
+    multi_select.js_on_change("value", callback_unificado)
+
+    # Botón para exportar CSV
+    export_button = Button(label="Exportar CSV", button_type="success")
+
+    # Callback JavaScript que filtra "source_static" usando los CLUSTER_ID presentes en "source_filtered"
+    export_callback = CustomJS(
+        args=dict(source_static=source_static, source_filtered=source_filtered),
+        code="""
+            // Función que convierte un objeto de datos en CSV
+            function table_to_csv(data_dict) {
+                const columns = Object.keys(data_dict);
+                const nrows = data_dict[columns[0]].length;
+                let lines = [];
+                // Agregar cabecera
+                lines.push(columns.join(','));
+                // Agregar cada fila
+                for (let i = 0; i < nrows; i++){
+                    let row = [];
+                    for (let j = 0; j < columns.length; j++){
+                        row.push(data_dict[columns[j]][i]);
+                    }
+                    lines.push(row.join(','));
+                }
+                return lines.join('\\n').concat('\\n');
+            }
+            
+            // Obtener los CLUSTER_ID de los datos filtrados (source_filtered)
+            const filtered_data = source_filtered.data;
+            const filtered_clusters = new Set(filtered_data['CLUSTER_ID']);
+            
+            // Obtener los datos originales (source_static) con las columnas de df
+            const orig = source_static.data;
+            let export_data = {};
+            // Inicializar export_data con las mismas columnas que orig
+            for (const key in orig) {
+                export_data[key] = [];
+            }
+            
+            const n = orig['CLUSTER_ID'].length;
+            // Filtrar: incluir solo filas cuyo CLUSTER_ID (convertido a string) esté en el conjunto filtrado
+            for (let i = 0; i < n; i++){
+                if (filtered_clusters.has(String(orig['CLUSTER_ID'][i]))){
+                    for (const key in orig){
+                        export_data[key].push(orig[key][i]);
+                    }
+                }
+            }
+            
+            // Convertir export_data a CSV
+            const csv = table_to_csv(export_data);
+            const filename = 'filtrado.csv';
+            
+            // Crear Blob y disparar la descarga del CSV
+            let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            if (navigator.msSaveBlob){
+                navigator.msSaveBlob(blob, filename);
+            } else {
+                let link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                link.target = "_blank";
+                link.style.visibility = 'hidden';
+                link.dispatchEvent(new MouseEvent('click'));
+            }
+        """
+    )
+
+    export_button.js_on_click(export_callback)
 
     # Crear layout
-    layout = row(column(p, slider, align="center"), column(multi_select), align="center")
+    layout = row(column(p, slider, align="center"), column(multi_select, export_button), align="center")
 
     # Mostrar el gráfico
     show(layout)
