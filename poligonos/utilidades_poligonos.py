@@ -4,9 +4,7 @@ from collections import defaultdict
 from scipy.interpolate import interp1d
 
 # Ejemplo restricciones: ["ARQUEOLOGIA", "C_SAL", "EXPLOTADO", "INFRAESTRUCTURA", "LOMAS", "PILAS", "POLVORIN", "HALLAZGOS"]
-# Ejemplo dimensiones : [25, 25, 0.5]
-def preprocesar_datos(df, restricciones, dimensiones):
-    #dim_x, dim_y, dim_z = dimensiones
+def preprocesar_datos(df, restricciones):
     dim_x, dim_y = df['XINC'].iloc[0], df['YINC'].iloc[0]
 
     # Aplicamos las restricciones entregadas
@@ -34,11 +32,7 @@ def preprocesar_datos(df, restricciones, dimensiones):
 def calcular_coordenadas_dict(df):
     coordenadas_dict = defaultdict(lambda: None)
 
-    # Filtramos bloques con caracteristicas negativas
-    df_filtrado = df[df['ESPESOR_CAL'] >= 2]
-    df_filtrado = df[df['PROFIT'] >= 0]
-
-    for _, row in df_filtrado.iterrows():
+    for _, row in df.iterrows():
         x, y = row['X'], row['Y']
         # Crear un diccionario con el resto de las columnas
         valores = row.drop(['X', 'Y']).to_dict()

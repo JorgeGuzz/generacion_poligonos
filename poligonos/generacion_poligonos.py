@@ -39,6 +39,22 @@ def eliminar_puntas(df, coordenadas_dict):
             df.loc[(df['X'] == x) & (df['Y'] == y), 'CLUSTER_ID'] = 1
     return coordenadas_filtradas
 
+def eliminar_bloques_indeseados(df, coordenadas_dict):
+    coordenadas_filtradas = defaultdict(lambda: None)
+    
+    for (x, y), valor in coordenadas_dict.items():
+        # Extraemos la fila correspondiente al punto (x, y)
+        fila = df[(df['X'] == x) & (df['Y'] == y)]
+        if not fila.empty:
+            # Verificamos si el bloque cumple ambas condiciones
+            if (fila.iloc[0]['ESPESOR_CAL'] >= 2) and (fila.iloc[0]['PROFIT'] >= 0):
+                # Si cumple, lo mantenemos en el diccionario filtrado
+                coordenadas_filtradas[(x, y)] = valor
+            else:
+                # Si no cumple, asignamos CLUSTER_ID = 2 al registro en el dataframe
+                df.loc[(df['X'] == x) & (df['Y'] == y), 'CLUSTER_ID'] = 2
+    return coordenadas_filtradas
+
 def expandir_clusters(df, inicial, coordenadas_dict, umbral_toneladas=100000):
     # Inicializar límites del cluster a partir del bloque inicial
     x0, y0 = inicial

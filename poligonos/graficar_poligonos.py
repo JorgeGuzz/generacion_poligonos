@@ -8,8 +8,8 @@ import os
 import math
 
 from bokeh.plotting import figure, show, output_file
-from bokeh.models import ColumnDataSource, HoverTool, Slider, CustomJS, ColorBar, FixedTicker, Button
-from bokeh.layouts import column
+from bokeh.models import ColumnDataSource, HoverTool, Slider, CustomJS, ColorBar, FixedTicker, Button, MultiSelect
+from bokeh.layouts import column, row
 from bokeh.transform import factor_cmap, linear_cmap
 from bokeh.palettes import Category20
 
@@ -102,7 +102,6 @@ def graficar_iso_prof_ton_bloques_individuales(df, ruta_outputs, nombre_sector):
     plt.tight_layout()
     plt.savefig(os.path.join(ruta_outputs, f'Profit por tonelada bloque a bloque {nombre_sector}.png'), dpi=300, bbox_inches="tight")
 
-
 def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_string):
     # Unir df con df_clusters para agregar las características de cada cluster
     df_merge = df.merge(df_clusters, on="CLUSTER_ID", how="left")
@@ -180,6 +179,7 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
         ("Toneladas (cluster)", "@TONNES_y{0,0}"),
         ("Prof/Ton (bloque)", "@PROF_TON_x{0.00}"),
         ("Prof/Ton (cluster)", "@PROF_TON_y{0.00}"),
+        ("Espesor Caliche (bloque)", "@ESPESOR_CAL_x{0.00}"),
         ("Ley I2", "@LEY_I2{0,0.00}"),
         ("Ley NANO3", "@NANO3{0.00}"),
         ("Factor Caliche I2", "@FC_I2{0.00}")
@@ -228,6 +228,7 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
         'TONNES_y': [],
         'PROF_TON_x': [],
         'PROF_TON_y': [],
+        'ESPESOR_CAL_x' : [],
         'LEY_I2': [],
         'NANO3': [],
         'FC_I2': []
@@ -244,6 +245,7 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
             fdata['TONNES_y'].push(data['TONNES_y'][i]);
             fdata['PROF_TON_x'].push(data['PROF_TON_x'][i]);
             fdata['PROF_TON_y'].push(data['PROF_TON_y'][i]);
+            fdata['ESPESOR_CAL_x'].push(data['ESPESOR_CAL_x'][i]);         
             fdata['LEY_I2'].push(data['LEY_I2'][i]);
             fdata['NANO3'].push(data['NANO3'][i]);
             fdata['FC_I2'].push(data['FC_I2'][i]);
@@ -298,11 +300,54 @@ def graficar_iso_prof_ton_clusters(df, df_clusters, ruta_outputs, nombre_sector,
         }
     """)
 
+    # Crear el widget MultiSelect con los clusters disponibles
+    unique_clusters = df_merge["CLUSTER_ID"].unique().tolist()
+    unique_clusters_sorted = sorted(unique_clusters, key=lambda x: int(x))
+    multi_select = MultiSelect(
+        title="Selecciona Clusters:",
+        value=unique_clusters_sorted,   # Por defecto, se seleccionan todos
+        options=unique_clusters_sorted,
+        size=25
+    )
+
+    # Callback que filtra la fuente en función de los clusters seleccionados y el slider
+    callback_select = CustomJS(args=dict(source=source, source_filtered=source_filtered, multi_select=multi_select, slider=slider), code="""
+        var data = source.data;
+        var fdata = { 'XC': [], 'YC': [], 'X': [], 'Y': [], 'CLUSTER_ID': [],
+                    'TONNES_x': [], 'TONNES_y': [], 'PROF_TON_x': [], 'PROF_TON_y': [],
+                    'ESPESOR_CAL_x': [], 'LEY_I2': [], 'NANO3': [], 'FC_I2': [] };
+        
+        var selected_clusters = multi_select.value;  // Array con los clusters seleccionados
+        var min_value = slider.value;
+        
+        for (var i = 0; i < data['CLUSTER_ID'].length; i++) {
+            if (selected_clusters.includes(data['CLUSTER_ID'][i]) && data['PROF_TON_y'][i] >= min_value) {
+                fdata['XC'].push(data['XC'][i]);
+                fdata['YC'].push(data['YC'][i]);
+                fdata['X'].push(data['X'][i]);
+                fdata['Y'].push(data['Y'][i]);
+                fdata['CLUSTER_ID'].push(data['CLUSTER_ID'][i]);
+                fdata['TONNES_x'].push(data['TONNES_x'][i]);
+                fdata['TONNES_y'].push(data['TONNES_y'][i]);
+                fdata['PROF_TON_x'].push(data['PROF_TON_x'][i]);
+                fdata['PROF_TON_y'].push(data['PROF_TON_y'][i]);
+                fdata['ESPESOR_CAL_x'].push(data['ESPESOR_CAL_x'][i]);
+                fdata['LEY_I2'].push(data['LEY_I2'][i]);
+                fdata['NANO3'].push(data['NANO3'][i]);
+                fdata['FC_I2'].push(data['FC_I2'][i]);
+            }
+        }
+        source_filtered.data = fdata;
+    """)
+
+    # Vincular el widget MultiSelect al callback
+    multi_select.js_on_change("value", callback_select)
+
     # Vincular el callback al botón
     export_button.js_on_click(export_callback)
 
-    # Agregar el botón al layout junto con el gráfico y el slider
-    layout = column(p, slider, export_button, align="center")
+    # Crear layout
+    layout = row(column(p, slider, align="center"), column(multi_select, export_button), align="center")
 
     # Mostrar el gráfico
     show(layout)
@@ -370,6 +415,7 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
         ("Toneladas (cluster)", "@TONNES_y{0,0}"),
         ("Prof/Ton (bloque)", "@PROF_TON_x{0.00}"),
         ("Prof/Ton (cluster)", "@PROF_TON_y{0.00}"),
+        ("Espesor Caliche (bloque)", "@ESPESOR_CAL_x{0.00}"),
         ("Ley I2", "@LEY_I2{0,0.00}"),
         ("Ley NANO3", "@NANO3{0.00}"),
         ("Factor Caliche I2", "@FC_I2{0.00}")
@@ -401,6 +447,7 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
         'TONNES_y': [],
         'PROF_TON_x': [],
         'PROF_TON_y': [],
+        'ESPESOR_CAL_x': [],
         'LEY_I2': [],
         'NANO3': [],
         'FC_I2': []
@@ -419,6 +466,7 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
             fdata['TONNES_y'].push(data['TONNES_y'][i]);
             fdata['PROF_TON_x'].push(data['PROF_TON_x'][i]);
             fdata['PROF_TON_y'].push(data['PROF_TON_y'][i]);
+            fdata['ESPESOR_CAL_x'].push(data['ESPESOR_CAL_x'][i]);
             fdata['LEY_I2'].push(data['LEY_I2'][i]);
             fdata['NANO3'].push(data['NANO3'][i]);
             fdata['FC_I2'].push(data['FC_I2'][i]);
@@ -432,8 +480,50 @@ def graficar_clusters(df, df_clusters, ruta_outputs, nombre_sector, tonelaje_str
     # Vincular el slider con el callback
     slider.js_on_change("value", callback)
 
-    # Crear layout con gráfico y slider
-    layout = column(p, slider)
+    # Crear el widget MultiSelect con los clusters disponibles
+    unique_clusters_sorted = sorted(unique_clusters, key=lambda x: int(x))
+    multi_select = MultiSelect(
+        title="Selecciona Clusters:",
+        value=unique_clusters_sorted,   # Por defecto, se seleccionan todos
+        options=unique_clusters_sorted,
+        size=25
+    )
+
+    # Callback que filtra la fuente en función de los clusters seleccionados y el slider
+    callback_select = CustomJS(args=dict(source=source, source_filtered=source_filtered, multi_select=multi_select, slider=slider), code="""
+        var data = source.data;
+        var fdata = { 'XC': [], 'YC': [], 'X': [], 'Y': [], 'CLUSTER_ID': [],
+                    'TONNES_x': [], 'TONNES_y': [], 'PROF_TON_x': [], 'PROF_TON_y': [],
+                    'ESPESOR_CAL_x': [], 'LEY_I2': [], 'NANO3': [], 'FC_I2': [] };
+        
+        var selected_clusters = multi_select.value;  // Array con los clusters seleccionados
+        var min_value = slider.value;
+        
+        for (var i = 0; i < data['CLUSTER_ID'].length; i++) {
+            if (selected_clusters.includes(data['CLUSTER_ID'][i]) && data['PROF_TON_y'][i] >= min_value) {
+                fdata['XC'].push(data['XC'][i]);
+                fdata['YC'].push(data['YC'][i]);
+                fdata['X'].push(data['X'][i]);
+                fdata['Y'].push(data['Y'][i]);
+                fdata['CLUSTER_ID'].push(data['CLUSTER_ID'][i]);
+                fdata['TONNES_x'].push(data['TONNES_x'][i]);
+                fdata['TONNES_y'].push(data['TONNES_y'][i]);
+                fdata['PROF_TON_x'].push(data['PROF_TON_x'][i]);
+                fdata['PROF_TON_y'].push(data['PROF_TON_y'][i]);
+                fdata['ESPESOR_CAL_x'].push(data['ESPESOR_CAL_x'][i]);
+                fdata['LEY_I2'].push(data['LEY_I2'][i]);
+                fdata['NANO3'].push(data['NANO3'][i]);
+                fdata['FC_I2'].push(data['FC_I2'][i]);
+            }
+        }
+        source_filtered.data = fdata;
+    """)
+
+    # Vincular el widget MultiSelect al callback
+    multi_select.js_on_change("value", callback_select)
+
+    # Crear layout
+    layout = row(column(p, slider, align="center"), column(multi_select), align="center")
 
     # Mostrar el gráfico
     show(layout)
